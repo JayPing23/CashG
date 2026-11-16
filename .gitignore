@@ -1,0 +1,7 @@
+node_modules/
+app/public/
+app/data/
+app/runtime/
+release/
+.taste-skill/
+*.log
