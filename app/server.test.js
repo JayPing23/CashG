@@ -126,6 +126,18 @@ test('bad requests get clear answers', async () => {
   assert.notEqual(traversal.status, 200);
 });
 
+test('requests addressed to another host or sent from another site are refused', async () => {
+  const http = require('node:http');
+  const { port } = new URL(base);
+  const status = (headers) => new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: '/api/tickets', headers }, (res) => { res.resume(); resolve(res.statusCode); }).on('error', reject);
+  });
+  assert.equal(await status({ Host: 'evil.example:' + port }), 403);
+  assert.equal(await status({ Host: 'localhost:' + port, Origin: 'https://evil.example' }), 403);
+  assert.equal(await status({ Host: 'localhost:' + port, Origin: 'http://localhost:' + port }), 200);
+  assert.equal(await status({ Host: '127.0.0.1:' + port }), 200);
+});
+
 test('tickets survive a restart', async () => {
   const { data: t } = await call('POST', '/api/tickets', valid);
   await stop();

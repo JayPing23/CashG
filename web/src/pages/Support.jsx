@@ -4,7 +4,7 @@ import { Page, useApp } from '../App.jsx';
 import { api, useLoad } from '../api.js';
 import { STATUS, formatDate, formatDateTime, matchesQuery } from '../lib.js';
 import { Button, Chips, Empty, Field, Icon, LoadError, Sheet, SkeletonRows, StatusPill, useToast } from '../ui.jsx';
-import { Composer, Timeline, Tracker } from './Tickets.jsx';
+import { Composer, LongText, Timeline, Tracker } from './Tickets.jsx';
 
 const IN_WORK = ['received', 'under_review', 'in_progress'];
 const FILTERS = {
@@ -45,7 +45,7 @@ export function SupportConsole() {
       title="Ticket queue"
       subtitle={list.length ? `${count('new')} new ${count('new') === 1 ? 'ticket needs' : 'tickets need'} acknowledging.` : undefined}
       notes="support"
-      actions={<Button variant="secondary" size="sm" icon="RotateCcw" onClick={() => setConfirmReset(true)}>Reset demo data</Button>}
+      actions={<Button variant="secondary" size="sm" icon="RotateCcw" onClick={() => setConfirmReset(true)}><span className="label">Reset demo data</span></Button>}
     >
       <div className="grid gap-6">
         <section className="card stat-strip" aria-label="Tickets by stage">
@@ -86,7 +86,7 @@ export function SupportConsole() {
                   <span className="num text-sm font-semibold">{t.reference}</span>
                   <span className="min-w-0">
                     <span className="row-title block">{t.subject}</span>
-                    <span className="row-sub block">{t.categoryLabel}{t.isDemo ? ' · Demo record' : ''}</span>
+                    <span className="row-sub block">{t.categoryLabel}{t.isDemo ? ', demo record' : ''}</span>
                   </span>
                   <span><StatusPill status={t.status} audience="support" /></span>
                   <span className="num text-sm" style={{ color: 'var(--muted)' }}>{formatDate(t.createdAt)}</span>
@@ -186,7 +186,7 @@ export function SupportTicket() {
         <div className="grid gap-6">
           <section className="card card-pad grid gap-3">
             <h2 className="text-base">Customer concern</h2>
-            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ticket.description}</p>
+            <LongText text={ticket.description} />
             <dl className="kv">
               <dt>Category</dt><dd>{ticket.categoryLabel}</dd>
               <dt>Transaction details</dt><dd>{ticket.details || 'None given'}</dd>

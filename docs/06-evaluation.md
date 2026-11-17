@@ -75,7 +75,7 @@ Materials are in `02-usability-test-kit.md`.
 |---|---|---|---|
 | | | | |
 
-## 6. Motion review (designer's check against Emil Kowalski's guidelines)
+## 6. Motion review (checked against common interface-motion guidelines)
 
 | Guideline | CashG | Verdict |
 |---|---|---|
@@ -85,4 +85,4 @@ Materials are in `02-usability-test-kit.md`.
 | Nothing appears from scale 0 | Dialogs start at 0.96, toasts at 0.96 | Meets |
 | Stagger delays 30–80 ms | Tracker steps 60 ms apart | Meets |
 | Reduced motion respected | Movement switched off; changes still happen | Meets |
-| Hover effects only on devices that hover | Not done | Open issue |
+| Hover effects only on devices that hover | Hover styles are limited to devices with a mouse | Meets |

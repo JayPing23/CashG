@@ -4,8 +4,9 @@ import { motion } from 'motion/react';
 import { Page, useApp } from '../App.jsx';
 import { api, useLoad } from '../api.js';
 import { CATEGORY_HELP, FAQS } from '../demoData.js';
-import { OPEN_STATUSES, STATUS, buildTracker, formatDate, formatDateTime, matchesQuery } from '../lib.js';
-import { Button, Chips, Empty, Field, Icon, IconButton, LoadError, SkeletonRows, StatusPill, statusIcon, useToast } from '../ui.jsx';
+import { StaySafe } from './Wallet.jsx';
+import { MAIN_STAGES, OPEN_STATUSES, STATUS, buildTracker, formatDate, formatDateTime, matchesQuery } from '../lib.js';
+import { Button, Chips, DrawnCheck, Empty, Field, Icon, IconButton, LoadError, SkeletonRows, StatusPill, statusIcon, useToast } from '../ui.jsx';
 
 const CATEGORY_ICON = { cash_in: 'Plus', send_money: 'Send', bills: 'Receipt', account: 'UserCheck', unauthorized: 'ShieldAlert', other: 'CircleHelp' };
 const RULES = { subject: [5, 100], description: [20, 2000], details: [0, 300] };
@@ -66,7 +67,7 @@ export function Help() {
               <span className="row-main">
                 <span className="row-title block">My tickets</span>
                 <span className="row-sub block">
-                  {tickets.loading && !tickets.data ? 'Loading' : `${open} open${updated ? ` · ${updated} with new updates` : ''}`}
+                  {tickets.loading && !tickets.data ? 'Loading' : `${open} open${updated ? `, ${updated} with new updates` : ''}`}
                 </span>
               </span>
               {updated > 0 && <span className="badge" aria-hidden="true">{updated}</span>}
@@ -167,7 +168,7 @@ export function NewTicket() {
     return (
       <Page title="Ticket submitted" notes="newticket" narrow>
         <motion.section className="card card-pad grid justify-items-center gap-4 text-center" initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-          <span className="avatar" style={{ width: 64, height: 64, background: 'var(--pill-positive-bg)', color: 'var(--pill-positive-ink)' }}><Icon name="Check" size={30} /></span>
+          <span className="avatar" style={{ width: 64, height: 64, background: 'var(--pill-positive-bg)', color: 'var(--pill-positive-ink)' }}><DrawnCheck /></span>
           <div>
             <h2 className="text-xl">We have your ticket</h2>
             <p style={{ color: 'var(--muted)' }}>Keep this reference number. You can follow every step from My tickets.</p>
@@ -188,11 +189,11 @@ export function NewTicket() {
   const label = meta.categories[form.category];
   const titles = ['What is this about?', 'Tell us what happened', 'Check your ticket'];
   return (
-    <Page title="New ticket" notes="newticket" narrow back="/help">
+    <Page title="New ticket" notes="newticket" narrow back="/help" rail={<aside className="rail wide-only"><StaySafe link={false} /></aside>}>
       <div className="mb-5 grid gap-2">
         <div className="stepper" role="img" aria-label={`Step ${step + 1} of 3`}>{[0, 1, 2].map((i) => <span key={i} className={i <= step ? 'on' : ''} />)}</div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Step {step + 1} of 3{restored ? ' · We kept your unfinished ticket' : form.subject.trim() || form.description.trim() ? ' · Draft saved on this device' : ''}
+          Step {step + 1} of 3{restored ? '. We kept your unfinished ticket.' : form.subject.trim() || form.description.trim() ? '. Draft saved on this device.' : ''}
         </p>
         <h2 className="text-xl">{titles[step]}</h2>
       </div>
@@ -271,7 +272,28 @@ export function Tickets() {
   const shown = list.filter((t) => FILTERS[filter](t) && matchesQuery(t, query));
   const count = (key) => list.filter(FILTERS[key]).length;
   return (
-    <Page title="My tickets" notes="tickets" narrow back="/help" actions={<Link className="btn primary sm" to="/help/new"><Icon name="Plus" size={16} />New ticket</Link>}>
+    <Page
+      title="My tickets"
+      notes="tickets"
+      narrow
+      back="/help"
+      actions={<Link className="btn primary sm" to="/help/new"><Icon name="Plus" size={16} /><span className="label">New ticket</span></Link>}
+      rail={
+        <aside className="rail wide-only">
+          <section className="card card-pad grid gap-4">
+            <h2 className="text-base">What each stop means</h2>
+            <ul className="grid gap-3" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {[...MAIN_STAGES.slice(0, 4), 'waiting_for_customer', ...MAIN_STAGES.slice(4)].map((key) => (
+                <li key={key} className="grid justify-items-start gap-1">
+                  <StatusPill status={key} />
+                  <span className="text-sm" style={{ color: 'var(--muted)' }}>{STATUS[key].help}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </aside>
+      }
+    >
       <div className="mb-5 grid gap-3">
         <div className="search">
           <Icon name="Search" size={18} />
@@ -305,7 +327,7 @@ export function Tickets() {
                   {t.unread && <span className="dot" role="img" aria-label="New update" />}
                   <span className="row-title">{t.subject}</span>
                 </span>
-                <span className="row-sub"><span className="num">{t.reference}</span> · {t.categoryLabel}</span>
+                <span className="row-sub"><span className="num">{t.reference}</span>, {t.categoryLabel}</span>
                 <span className="text-sm" style={{ color: 'var(--muted)' }}>
                   <span className="block">Submitted {formatDate(t.createdAt)}</span>
                   <span className="block">Updated {formatDateTime(t.updatedAt)}</span>
@@ -335,9 +357,10 @@ export function Tracker({ ticket, audience = 'customer' }) {
             key={s.key}
             className={`step ${s.state}${s.key === 'resolved' && s.state === 'current' ? ' resolved' : ''}`}
             aria-current={active ? 'step' : undefined}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.06, duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            style={{ '--i': i }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: i * 0.06, duration: 0.3 }}
           >
             <span className="step-mark"><Icon name={s.state === 'done' ? 'Check' : statusIcon(s.key)} size={16} /></span>
             <div>
@@ -366,7 +389,7 @@ export function Timeline({ ticket, viewer = 'customer' }) {
     <ol className="timeline">
       {ticket.events.map((e) => {
         if (e.type === 'message' || e.body) {
-          const title = e.type === 'message' ? who(e.actor) : viewer === 'support' ? `${who('support')} · ${STATUS[e.to].short}` : NOTE_TITLE[e.to] || 'Update from support';
+          const title = e.type === 'message' ? who(e.actor) : viewer === 'support' ? `${who('support')}: ${STATUS[e.to].short}` : NOTE_TITLE[e.to] || 'Update from support';
           return (
             <li key={e.id} className={`bubble${e.actor === viewer ? ' mine' : ''}`}>
               <div className="bubble-head"><span>{title}</span><time dateTime={e.at}>{formatDateTime(e.at)}</time></div>
@@ -377,11 +400,26 @@ export function Timeline({ ticket, viewer = 'customer' }) {
         return (
           <li key={e.id} className="event-line">
             <Icon name={statusIcon(e.to)} size={14} style={{ flex: 'none', translate: '0 2px' }} />
-            <span>{viewer === 'support' && e.to === 'waiting_for_customer' ? 'Waiting for customer' : STATUS[e.to].label} · <time dateTime={e.at}>{formatDateTime(e.at)}</time></span>
+            <span>{viewer === 'support' && e.to === 'waiting_for_customer' ? 'Waiting for customer' : STATUS[e.to].label}, <time dateTime={e.at}>{formatDateTime(e.at)}</time></span>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+export function LongText({ text }) {
+  const long = text.length > 400;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="grid justify-items-start gap-1">
+      <p className={`long-text${long && !open ? ' clamped' : ''}`}>{text}</p>
+      {long && (
+        <button type="button" className="link" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : 'Show full message'}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -478,7 +516,7 @@ export function TicketDetail() {
       )}
 
       <div className="grid items-start gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
-        <section className="card card-pad" aria-label="Ticket progress">
+        <section className="card card-pad" aria-label="Ticket progress" data-note="tracker">
           <h2 className="section-title">Progress</h2>
           <Tracker ticket={ticket} />
         </section>
@@ -486,7 +524,7 @@ export function TicketDetail() {
         <div className="grid gap-6">
           <section className="card card-pad grid gap-3">
             <h2 className="text-base">{ticket.subject}</h2>
-            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ticket.description}</p>
+            <LongText text={ticket.description} />
             <dl className="kv">
               <dt>Category</dt><dd>{ticket.categoryLabel}</dd>
               {ticket.details && (<><dt>Transaction details</dt><dd>{ticket.details}</dd></>)}

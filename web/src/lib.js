@@ -44,6 +44,35 @@ const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP'
 export const money = (n) => peso.format(n);
 export const signedMoney = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + peso.format(Math.abs(n));
 
+// Money in, money out and the difference for a list of transactions. Summed in whole centavos so
+// the three figures always agree with the rows on screen.
+export function totals(rows) {
+  let moneyIn = 0;
+  let moneyOut = 0;
+  for (const t of rows) {
+    const centavos = Math.round(t.amount * 100);
+    if (centavos > 0) moneyIn += centavos;
+    else moneyOut += centavos;
+  }
+  return { in: moneyIn / 100, out: moneyOut / 100, net: (moneyIn + moneyOut) / 100 };
+}
+
+// Good morning, afternoon or evening, in Filipino, by the hour on this device.
+export const greeting = (now = new Date()) => (now.getHours() < 12 ? 'Magandang umaga' : now.getHours() < 18 ? 'Magandang hapon' : 'Magandang gabi');
+
+// Money out grouped by kind, largest first, as positive amounts. Summed in centavos like totals().
+export function spendByKind(rows) {
+  const byKind = new Map();
+  for (const t of rows) {
+    const centavos = Math.round(t.amount * 100);
+    if (centavos < 0) byKind.set(t.kind, (byKind.get(t.kind) || 0) - centavos);
+  }
+  return [...byKind].map(([kind, c]) => ({ kind, amount: c / 100 })).sort((a, b) => b.amount - a.amount);
+}
+
+// "Miguel R." becomes "MR"; one-word names give one letter.
+export const initialsOf = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+
 const dateTime = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const dateOnly = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 const timeOnly = new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' });

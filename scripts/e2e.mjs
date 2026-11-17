@@ -154,7 +154,7 @@ try {
     await until(`document.documentElement.dataset.theme === 'dark'`, 'dark theme kept after reload');
     await go('/profile');
     await run(`[...document.querySelectorAll('[role=radio]')].find((b) => b.textContent.trim() === 'Light').click()`);
-    await until(`document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(243, 245, 247)'`, 'light theme colours');
+    await until(`document.documentElement.dataset.theme === 'light' && getComputedStyle(document.documentElement).backgroundColor === 'rgb(240, 244, 250)'`, 'light theme colours');
   });
   await shownStep('design notes open with content', async () => {
     await run(`document.querySelector('button[aria-label="Show design notes"]').click()`);
@@ -173,10 +173,12 @@ try {
     await run(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Send ₱')).click()`);
     await until(`__has('no money was sent')`, 'demo receipt');
   });
-  await shownStep('demo service opens a labelled demonstration sheet', async () => {
+  await shownStep('a service opens its own designed page, and its buttons say they are a demo', async () => {
     await go('/services');
     await run(`[...document.querySelectorAll('button.row')].find((b) => b.textContent.includes('Pay electricity')).click()`);
-    await until(`!!document.querySelector('dialog[open]') && __has('design demonstration')`, 'demo sheet');
+    await until(`location.pathname === '/services/bills' && __has('Saved billers') && __has('Design demonstration')`, 'bills page');
+    await run(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Pay').click()`);
+    await until(`__has('is a demo')`, 'demo toast');
   });
   await shownStep('a number typed as +63 is accepted and tidied', async () => {
     await go('/send');

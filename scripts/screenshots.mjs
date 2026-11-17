@@ -49,6 +49,11 @@ const clickText = (text) => `[...document.querySelectorAll('button, a')].find((e
 const SCREENS = [
   ['home', '/'],
   ['home-scrolled', '/', `window.scrollTo(0, 430)`],
+  ['home-card-back', '/', `document.querySelector('button[aria-label="Show the back of the card"]').click()`],
+  ['design-notes', '/', `document.querySelector('button[aria-label="Show design notes"]').click(); setTimeout(() => [...document.querySelectorAll('.note-q')].find((b) => b.textContent.includes('line with dots'))?.click(), 300)`],
+  ['scan-qr', '/services/qr'],
+  ['savings', '/services/save'],
+  ['invest', '/services/invest'],
   ['services', '/services'],
   ['my-tickets-scrolled', '/help/tickets', `window.scrollTo(0, 260)`],
   ['send-amount', '/send', `[...document.querySelectorAll('button.row')].find((b) => b.textContent.includes('Miguel R.')).click()`],
@@ -73,12 +78,12 @@ for (const [sizeName, size] of Object.entries(SIZES)) {
   for (const theme of ['light', 'dark']) {
     for (const [name, route, action] of SCREENS) {
       // Start each picture from a clean slate so one screen's choices never leak into the next.
-      await send('Page.navigate', { url: BASE + route + (route.includes('?') ? '&' : '?') + 'theme=' + theme });
-      await sleep(700);
       await send('Runtime.evaluate', { expression: `try { localStorage.removeItem('cashg-notes') } catch (e) {}` });
+      await send('Page.navigate', { url: BASE + route + (route.includes('?') ? '&' : '?') + 'theme=' + theme });
+      await sleep(1500); // lets the opening animations finish
       if (action) {
         await send('Runtime.evaluate', { expression: action });
-        await sleep(700);
+        await sleep(1500);
       }
       const shot = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(path.join(OUT, `${sizeName}-${theme}-${name}.png`), Buffer.from(shot.result.data, 'base64'));

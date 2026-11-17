@@ -68,7 +68,7 @@ Every row names something that exists in the built app, so each can be shown liv
 | Visibility of system status is among the most important usability principles | NN/g, "Visibility of System Status" | Made it the centre of the ticket experience |
 | On mobile, labels belong above the field; inline labels disappear when typing starts | Baymard Institute | All labels sit above their fields; no placeholder-only labels |
 | Single-column forms cause fewer skipped fields and errors than multi-column ones | Baymard Institute (2023) | Every form is one column |
-| Glass effects help show depth but hurt contrast when used on text over changing content | NN/g, "Glassmorphism" | Frosted effect on the bottom bar and sheet backdrop only |
+| Glass effects help show depth but hurt contrast when used on text over changing content | NN/g, "Glassmorphism" | Frost is kept to the bottom bar, where content scrolls under it; cards and panels are solid, since glass on text surfaces is both a contrast risk and a common sign of generated design |
 | A redesigned e-wallet scored better than an existing one with 35 Filipino senior citizens on design, navigation, efficiency and language | AHFE 2024 conference paper | Plain language, labelled icons, larger targets (we have not read the full paper) |
 
 ## The frosted look: tried, then partly kept
@@ -98,3 +98,20 @@ The design tool we used recommended a frosted-glass style. We applied it, looked
 - Baymard, Avoid Multi-Column Forms: https://baymard.com/blog/avoid-multi-column-forms
 - AHFE 2024, e-wallet design for senior citizens in the Philippines: https://openaccess.cms-conferences.org/publications/book/978-1-964867-32-8/article/978-1-964867-32-8_45
 - Axess Lab, Glassmorphism Meets Accessibility: https://axesslab.com/?p=5111
+
+## Reimagining pass, 17 November 2026
+
+A design review scored the first build 7.0 out of 10: usable, but most screens could have belonged to any app. These changes answer the laws that were claimed but weakly applied.
+
+| Law | What was weak | What changed |
+|---|---|---|
+| Aesthetic-Usability Effect | "One blue, one font" is consistency, not beauty | Greys now lean toward the brand blue; the Home header has two deeper flat tones for depth; inner corners follow the outer corner minus the padding |
+| Law of Uniform Connectedness | The tracker idea lived on one screen only | The route, one line with stops, is now the signature: on the Home ticket card, on the tracker (the line draws itself to the current stop) and on the Send confirmation |
+| Goal-Gradient Effect | Home showed six unlabelled dashes | The Home card names the position: "Stop 4 of 6" |
+| Von Restorff Effect | A ticket waiting for a reply sat below eight service tiles on a phone | When a ticket needs the customer, its card moves above the services on phones |
+| Peak-End Rule | The closing moments were a plain fade | The success tick draws itself once; the Send ending shows the money travelling from you to the recipient |
+| Doherty Threshold | Feedback was colour change only | The selected pill slides between filters, tabs and sidebar items; the balance counts up when revealed; phone sheets can be pulled down by their handle |
+| Consistency and standards (Nielsen 4) | Desktop screens used two different left edges | Every screen shares one left and one right edge; narrow screens gain a second column of real content (activity totals, what each stop means, a safety reminder) |
+| Recognition rather than recall (Nielsen 6) | Every activity row carried the same arrow | People are shown by their initials, businesses by a category icon; the repeated category label is gone |
+
+All motion stops for anyone who asks their device for reduced motion.

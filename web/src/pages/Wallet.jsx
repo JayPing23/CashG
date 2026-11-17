@@ -1,11 +1,30 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'motion/react';
 import { Page, useApp } from '../App.jsx';
 import { BALANCE, CONTACTS, LIMITS, NOTICES, QUICK_ACTIONS, SERVICE_GROUPS, TRANSACTIONS, USER } from '../demoData.js';
-import { MAIN_STAGES, OPEN_STATUSES, STATUS, dayLabel, formatDateTime, formatTime, money, signedMoney } from '../lib.js';
-import { Button, Chips, Empty, Field, Icon, IconButton, LoadError, Segmented, Sheet, SkeletonRows, StatusPill, Switch, useToast } from '../ui.jsx';
+import { MAIN_STAGES, OPEN_STATUSES, STATUS, dayLabel, formatDateTime, formatTime, greeting, initialsOf, money, signedMoney, spendByKind, totals } from '../lib.js';
+import { Button, Chips, DrawnCheck, Empty, Field, Icon, IconButton, LoadError, Logo, RouteLine, Segmented, Sheet, SkeletonRows, StatusPill, Switch, useToast } from '../ui.jsx';
 
 export const ALL_SERVICES = SERVICE_GROUPS.flatMap((g) => g.items);
+const OFFERS = NOTICES.filter((n) => n.tab === 'offers');
+const EASE = [0.16, 1, 0.3, 1];
+// Home's blocks arrive one after another, once, as the screen opens.
+const rise = (i) => ({ initial: { opacity: 0, transform: 'translateY(10px)' }, animate: { opacity: 1, transform: 'translateY(0px)' }, transition: { delay: 0.04 * i, duration: 0.3, ease: EASE } });
+// Home is opened many times a day. Its showpiece moments (the header route drawing, the balance counting up)
+// play the first time in a visit to the app, not every time.
+let homeSeen = false;
+
+// The route, drawn large across the header: two lines with stops that draw themselves once.
+function HeroRoute({ draw }) {
+  const line = (delay) => ({ initial: draw ? { pathLength: 0 } : false, animate: { pathLength: 1 }, transition: { duration: 1.4, delay, ease: EASE } });
+  return (
+    <svg className="hero-art" viewBox="0 0 600 240" preserveAspectRatio="xMaxYMid slice" fill="none" aria-hidden="true">
+      <motion.path d="M-20 214 C 150 214, 250 96, 430 96 S 560 80, 640 26" stroke="currentColor" strokeOpacity="0.26" strokeWidth="2" strokeLinecap="round" {...line(0.1)} />
+      <motion.path d="M150 262 C 260 190, 372 226, 474 150 S 600 126, 668 100" stroke="currentColor" strokeOpacity="0.16" strokeWidth="2" strokeLinecap="round" {...line(0.3)} />
+    </svg>
+  );
+}
 const DEMO_LINE = 'This screen is a design demonstration. No money moves and nothing is saved.';
 
 export function DemoSheet({ service, onClose }) {
@@ -23,18 +42,86 @@ export function DemoSheet({ service, onClose }) {
 
 function useService() {
   const navigate = useNavigate();
-  const [demo, setDemo] = useState(null);
-  const open = (service) => (service.to ? navigate(service.to) : setDemo(service));
-  return [open, <DemoSheet key="demo" service={demo} onClose={() => setDemo(null)} />];
+  return (service) => navigate(service.to || `/services/${service.id}`);
+}
+
+// A person is shown by their initials; a business by what it is. One colour for all of them:
+// the direction of the money is already said by the sign and colour of the amount.
+const KIND_ICON = { 'Cash in': 'Landmark', Bills: 'Receipt', Load: 'Smartphone', 'QR payment': 'QrCode' };
+function PartyAvatar({ name, kind }) {
+  if (KIND_ICON[kind]) return <span className="avatar" aria-hidden="true"><Icon name={KIND_ICON[kind]} size={18} /></span>;
+  return <span className="avatar" aria-hidden="true" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>{initialsOf(name)}</span>;
+}
+
+// The balance counts up when Home opens and when it is revealed.
+function Balance({ hidden, countOnOpen }) {
+  const reduce = useReducedMotion();
+  const wasHidden = useRef(countOnOpen ? null : hidden); // null makes the first render count as a reveal
+  const [shown, setShown] = useState(BALANCE);
+  useEffect(() => {
+    const revealed = wasHidden.current !== false && !hidden;
+    wasHidden.current = hidden;
+    if (!revealed || reduce) return setShown(BALANCE);
+    const run = animate(0, BALANCE, { duration: 0.6, ease: [0.16, 1, 0.3, 1], onUpdate: setShown });
+    return () => run.stop();
+  }, [hidden, reduce]);
+  if (hidden) return <p className="balance-figure">₱ ••••••</p>;
+  const text = money(shown);
+  const dot = text.lastIndexOf('.');
+  return (
+    <p className="balance-figure" aria-label={money(BALANCE)}>
+      <span className="cur" aria-hidden="true">{text.slice(0, 1)}</span>
+      <span aria-hidden="true">{text.slice(1, dot)}</span>
+      <span className="cents" aria-hidden="true">{text.slice(dot)}</span>
+    </p>
+  );
+}
+
+// Where the money went: one figure and its parts, in shades of the one brand blue.
+const SHADES = ['var(--accent-deeper)', 'var(--accent)', 'color-mix(in srgb, var(--accent) 55%, var(--surface))', 'color-mix(in srgb, var(--accent) 30%, var(--surface))'];
+function Spending() {
+  const parts = spendByKind(TRANSACTIONS);
+  const total = parts.reduce((sum, p) => sum + p.amount, 0);
+  return (
+    <Link to="/activity" className="card spend">
+      <div>
+        <h2 className="text-base">Where your money went</h2>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Money out, last {TRANSACTIONS.length} transactions</p>
+        <p className="spend-total num">{money(total)}</p>
+      </div>
+      <div className="spend-bar" aria-hidden="true">
+        {parts.map((p, i) => <span key={p.kind} style={{ flexGrow: p.amount, background: SHADES[Math.min(i, SHADES.length - 1)], '--i': i }} />)}
+      </div>
+      <ul className="spend-legend">
+        {parts.map((p, i) => (
+          <li key={p.kind}>
+            <span className="swatch" style={{ background: SHADES[Math.min(i, SHADES.length - 1)] }} aria-hidden="true" />
+            {p.kind}
+            <span className="num">{money(p.amount)}</span>
+          </li>
+        ))}
+      </ul>
+    </Link>
+  );
+}
+
+export function StaySafe({ link = true }) {
+  return (
+    <section className="card card-pad grid gap-3">
+      <h2 className="text-base">Stay safe</h2>
+      <p style={{ color: 'var(--muted)' }}>CashG will never ask for your MPIN or a one-time code, by call, text or chat.</p>
+      {link && <Link className="link" to="/help">Go to Help</Link>}
+    </section>
+  );
 }
 
 function TransactionRow({ t, onOpen }) {
   return (
     <button type="button" className="row" onClick={() => onOpen(t)}>
-      <span className="avatar"><Icon name={t.amount > 0 ? 'ArrowDownLeft' : 'ArrowUpRight'} size={18} /></span>
+      <PartyAvatar name={t.party} kind={t.kind} />
       <span className="row-main">
         <span className="row-title block">{t.title}</span>
-        <span className="row-sub block">{t.kind} · {formatTime(t.at)}</span>
+        <span className="row-sub block">{formatTime(t.at)}</span>
       </span>
       <span className="row-end num" style={{ fontWeight: 600, color: t.amount > 0 ? 'var(--positive)' : 'var(--text)' }}>
         {signedMoney(t.amount)}
@@ -101,101 +188,183 @@ function TicketCard() {
         {open.length > 1 && <Link className="link" to="/help/tickets">All {open.length} open</Link>}
       </div>
       <Link to={`/help/tickets/${ticket.reference}`} className="row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, alignItems: 'start' }}>
-        <span className="flex items-start justify-between gap-3">
-          <span className="row-main">
-            <span className="block font-medium">{ticket.subject}</span>
-            <span className="row-sub num block">{ticket.reference}</span>
+        <span className="flex flex-wrap items-start justify-between gap-3">
+          <span className="row-main" style={{ flex: '1 1 12rem' }}>
+            <span className="block font-medium" style={{ overflowWrap: 'anywhere' }}>{ticket.subject}</span>
+            <span className="row-sub num ref block">{ticket.reference}</span>
           </span>
           <StatusPill status={ticket.status} />
         </span>
-        <span className="stepper" aria-hidden="true">
-          {MAIN_STAGES.map((s, i) => <span key={s} className={i <= reached ? 'on' : ''} />)}
-        </span>
+        <RouteLine stops={MAIN_STAGES.length} reached={reached} tone={waiting ? 'warning' : 'accent'} />
         <span className="text-sm" style={{ color: waiting ? 'var(--pill-warning-ink)' : 'var(--muted)', fontWeight: waiting ? 600 : 400 }}>
-          {waiting ? 'We need a reply from you to continue.' : STATUS[ticket.status].help}
+          Stop {reached + 1} of {MAIN_STAGES.length}. {waiting ? 'We need a reply from you to continue.' : STATUS[ticket.status].help}
         </span>
       </Link>
     </section>
   );
 }
 
+// The CashG card: the balance on a card you can almost pick up. It leans toward the pointer and catches the light,
+// and turns over to show the physical card's back. With reduced motion it stays flat and the turn is instant.
+function WalletCard({ hidden, onToggle, firstVisit, onCashIn }) {
+  const reduce = useReducedMotion();
+  const toast = useToast();
+  const [flipped, setFlipped] = useState(false);
+  const mx = useMotionValue(0.5);
+  const my = useMotionValue(0.5);
+  const sx = useSpring(mx, { stiffness: 180, damping: 18 });
+  const sy = useSpring(my, { stiffness: 180, damping: 18 });
+  const rotateY = useTransform(sx, [0, 1], [-9, 9]);
+  const rotateX = useTransform(sy, [0, 1], [7, -7]);
+  const sheen = useTransform([sx, sy], ([x, y]) => `radial-gradient(circle at ${x * 100}% ${y * 100}%, rgb(255 255 255 / 0.45), transparent 50%)`);
+  const move = (e) => {
+    if (reduce) return; // a finger only moves this while pressed; a vertical drag still scrolls the page (touch-action: pan-y)
+    const r = e.currentTarget.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width);
+    my.set((e.clientY - r.top) / r.height);
+  };
+  const rest = () => { mx.set(0.5); my.set(0.5); };
+  // A tap on the card's surface turns it over; taps on its buttons do their own job.
+  const tapCard = (e) => !e.target.closest('button, a') && setFlipped((f) => !f);
+  const shine = !reduce && <motion.span className="card3d-sheen" style={{ background: sheen }} aria-hidden="true" />;
+  return (
+    <div className="card3d-stage" data-note="card" onPointerMove={move} onPointerLeave={rest} onPointerUp={(e) => e.pointerType !== 'mouse' && rest()} onPointerCancel={rest}>
+      <motion.div className="card3d" style={reduce ? undefined : { rotateX, rotateY }}>
+        <motion.div className="card3d-flip" onClick={tapCard} animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', duration: 0.7, bounce: 0.18 }}>
+          <div className="card3d-face" inert={flipped} aria-hidden={flipped || undefined}>
+            <HeroRoute draw={firstVisit} />
+            {shine}
+            <div className="card3d-top">
+              <span className="card3d-brand"><Logo size={28} />CashG</span>
+              <IconButton icon="RotateCw" label="Show the back of the card" onClick={() => setFlipped(true)} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <span className="balance-label">Available balance</span>
+                <IconButton icon={hidden ? 'EyeOff' : 'Eye'} label={hidden ? 'Show balance' : 'Hide balance'} aria-pressed={hidden} onClick={onToggle} />
+              </div>
+              <Balance hidden={hidden} countOnOpen={firstVisit} />
+            </div>
+            <div className="card3d-foot">
+              <span className="min-w-0">
+                <span className="card3d-holder block">{USER.name.toUpperCase()}</span>
+                <span className="card3d-holder num block">•••• {USER.mobile.slice(-4)}</span>
+              </span>
+              <button type="button" className="cashin" onClick={onCashIn}><Icon name="Plus" size={18} />Cash in</button>
+            </div>
+          </div>
+
+          <div className="card3d-face back" inert={!flipped} aria-hidden={!flipped || undefined}>
+            {shine}
+            <span className="card3d-stripe" aria-hidden="true" />
+            <div className="card3d-sign">
+              <span aria-hidden="true" />
+              <span className="card3d-cvv num" aria-label="Security code hidden">•••</span>
+            </div>
+            <div className="grid content-center gap-1">
+              <span className="card3d-number num" aria-label={`Card number ending in ${USER.mobile.slice(-4)}`}>•••• •••• •••• {USER.mobile.slice(-4)}</span>
+              <span className="card3d-holder num">VALID THRU 11/30 · SAMPLE CARD</span>
+            </div>
+            <div className="card3d-foot">
+              <button type="button" className="pass-btn" onClick={() => toast('Locking the card is a demo. Nothing was changed.', 'Info')}><Icon name="Lock" size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: '-3px' }} />Lock card</button>
+              <IconButton icon="RotateCcw" label="Show the front of the card" onClick={() => setFlipped(false)} />
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
 export function Home() {
-  const { hideBalance, setHideBalance } = useApp();
-  const [openService, demoSheet] = useService();
+  const { hideBalance, setHideBalance, tickets } = useApp();
+  const openService = useService();
   const [receipt, setReceipt] = useState(null);
   const navigate = useNavigate();
+  const firstVisit = useRef(!homeSeen);
+  useEffect(() => { homeSeen = true; }, []);
+  // The one thing that needs the customer goes first on a phone, above the services.
+  const needsReply = (tickets.data || []).some((t) => t.status === 'waiting_for_customer');
   const quick = QUICK_ACTIONS.map((id) => ALL_SERVICES.find((s) => s.id === id));
   return (
     <Page
       title="Home"
       notes="home"
-      lifted
       hero={({ heading, notesButton }) => (
-        <header className="hero">
-          <div className="hero-inner">
-            <div className="flex items-center gap-2">
-              <span className="avatar" aria-hidden="true">{USER.initials}</span>
-              <h1 {...heading}>Hello, {USER.name.split(' ')[0]}</h1>
-              <Link to="/inbox" className="icon-btn" aria-label="Inbox" title="Inbox"><Icon name="Bell" /></Link>
-              {notesButton}
-            </div>
-            <div className="mt-4 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1">
-                  <span className="balance-label">Available balance</span>
-                  <IconButton
-                    icon={hideBalance ? 'EyeOff' : 'Eye'}
-                    label={hideBalance ? 'Show balance' : 'Hide balance'}
-                    aria-pressed={hideBalance}
-                    onClick={() => setHideBalance(!hideBalance)}
-                  />
-                </div>
-                <p className="balance-figure">{hideBalance ? '₱ ••••••' : money(BALANCE)}</p>
-              </div>
-              <button type="button" className="cashin" onClick={() => openService(ALL_SERVICES.find((s) => s.id === 'cashin'))}>
-                <Icon name="Plus" size={18} />Cash in
-              </button>
-            </div>
-          </div>
+        <header className="home-head">
+          <span className="avatar" aria-hidden="true">{USER.initials}</span>
+          <h1 {...heading}>{greeting()}, {USER.name.split(' ')[0]}</h1>
+          <Link to="/inbox" className="icon-btn" aria-label="Inbox" title="Inbox"><Icon name="Bell" /></Link>
+          {notesButton}
         </header>
       )}
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="grid gap-6">
-          <nav className="card services" aria-label="Services">
-            {quick.map((s) => (
-              <button key={s.id} type="button" className="svc" onClick={() => openService(s)}>
-                <span className="svc-icon"><Icon name={s.icon} size={24} /></span>
-                {s.label}
+      <div className="bento">
+        <motion.div {...rise(0)} className="b-card">
+          <WalletCard hidden={hideBalance} onToggle={() => setHideBalance(!hideBalance)} firstVisit={firstVisit.current} onCashIn={() => openService(ALL_SERVICES.find((s) => s.id === 'cashin'))} />
+        </motion.div>
+
+        <motion.div {...rise(1)} className="b-spend" data-note="spend"><Spending /></motion.div>
+
+        <motion.nav {...rise(4)} className="b-svc card services" aria-label="Services" data-note="services">
+          {quick.map((s, i) => (
+            <motion.button
+              key={s.id}
+              type="button"
+              className="svc"
+              onClick={() => openService(s)}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 + i * 0.03, type: 'spring', duration: 0.35, bounce: 0.2 }}
+            >
+              <span className="svc-icon"><Icon name={s.icon} size={24} /></span>
+              {s.label}
+            </motion.button>
+          ))}
+          <button type="button" className="svc" onClick={() => navigate('/services')}>
+            <span className="svc-icon"><Icon name="LayoutGrid" size={24} /></span>
+            View all
+          </button>
+        </motion.nav>
+
+        <motion.section {...rise(3)} className="b-people card" data-note="people">
+          <div className="card-head"><h2>Send again</h2></div>
+          <div className="people" style={{ padding: '4px 16px 20px', margin: 0 }}>
+            {CONTACTS.map((c) => (
+              // Opens Send with this person already chosen, so the next thing asked is the amount.
+              <button key={c.mobile} type="button" className="person" onClick={() => navigate('/send', { state: { to: c } })}>
+                <PartyAvatar name={c.name} />
+                {c.name.split(' ')[0]}
               </button>
             ))}
-            <button type="button" className="svc" onClick={() => navigate('/services')}>
-              <span className="svc-icon"><Icon name="LayoutGrid" size={24} /></span>
-              View all
-            </button>
-          </nav>
+          </div>
+        </motion.section>
 
-          <div className="lg:hidden"><TicketCard /></div>
-
-          <section className="card">
-            <div className="card-head">
-              <h2>Recent activity</h2>
-              <Link className="link" to="/activity">View all</Link>
+        {/* One column on wide screens; on a phone its tiles join the main order. */}
+        <div className="b-left">
+          <motion.div {...rise(2)} className={`b-ticket${needsReply ? ' urgent' : ''}`} data-note="ticket"><TicketCard /></motion.div>
+  
+          <motion.section {...rise(6)} className="b-offers" aria-label="Offers">
+            <div className="promos">
+              {OFFERS.map((p, i) => (
+                <button key={p.id} type="button" className={`promo ${i % 2 ? 'promo-b' : 'promo-a'}`} onClick={() => navigate('/services/rewards')}>
+                  <span className="promo-tag">Sample promo</span>
+                  <span className="promo-title">{p.title.replace('Sample promo: ', '')}</span>
+                </button>
+              ))}
             </div>
-            {TRANSACTIONS.slice(0, 4).map((t) => <TransactionRow key={t.id} t={t} onOpen={setReceipt} />)}
-          </section>
+          </motion.section>
         </div>
 
-        <div className="hidden gap-6 lg:grid">
-          <TicketCard />
-          <section className="card card-pad grid gap-3">
-            <h2 className="text-base">Stay safe</h2>
-            <p style={{ color: 'var(--muted)' }}>CashG will never ask for your MPIN or a one-time code, by call, text or chat.</p>
-            <Link className="link" to="/help">Go to Help</Link>
-          </section>
-        </div>
+        <motion.section {...rise(5)} className="b-recent card">
+          <div className="card-head">
+            <h2>Recent activity</h2>
+            <Link className="link" to="/activity">View all</Link>
+          </div>
+          {TRANSACTIONS.slice(0, 4).map((t) => <TransactionRow key={t.id} t={t} onOpen={setReceipt} />)}
+        </motion.section>
+
       </div>
-      {demoSheet}
       <ReceiptSheet t={receipt} onClose={() => setReceipt(null)} />
     </Page>
   );
@@ -203,7 +372,7 @@ export function Home() {
 
 export function Services() {
   const [query, setQuery] = useState('');
-  const [openService, demoSheet] = useService();
+  const openService = useService();
   const q = query.trim().toLowerCase();
   const groups = SERVICE_GROUPS.map((g) => ({ ...g, items: g.items.filter((s) => !q || `${s.label} ${s.about}`.toLowerCase().includes(q)) })).filter((g) => g.items.length);
   return (
@@ -221,7 +390,7 @@ export function Services() {
               <div className="card-head"><h2>{g.title}</h2></div>
               {g.items.map((s) => (
                 <button key={s.id} type="button" className="row" onClick={() => openService(s)}>
-                  <Icon name={s.icon} style={{ color: 'var(--muted)', flex: 'none' }} />
+                  <Icon name={s.icon} style={{ color: 'var(--accent-text)', flex: 'none' }} />
                   <span className="row-main"><span className="row-title block">{s.label}</span><span className="row-sub block">{s.about}</span></span>
                   <Icon name="ChevronRight" size={18} style={{ color: 'var(--muted)', flex: 'none' }} />
                 </button>
@@ -230,7 +399,6 @@ export function Services() {
           ))}
         </div>
       )}
-      {demoSheet}
     </Page>
   );
 }
@@ -243,8 +411,9 @@ const cleanMobile = (v) => {
 
 export function Send() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [to, setTo] = useState({ name: '', mobile: '' });
+  const chosen = useLocation().state?.to;
+  const [step, setStep] = useState(chosen ? 1 : 0);
+  const [to, setTo] = useState(chosen || { name: '', mobile: '' });
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState({});
@@ -275,10 +444,26 @@ export function Send() {
 
   const titles = ['Who are you sending to?', 'How much?', 'Check before you send', 'Demo complete'];
   return (
-    <Page title="Send money" notes="send" narrow back={step === 0 || step === 3 ? '/' : undefined} actions={null}>
+    <Page
+      title="Send money"
+      notes="send"
+      narrow
+      back={step === 0 || step === 3 ? '/' : undefined}
+      actions={null}
+      rail={
+        <aside className="rail wide-only">
+          <section className="card card-pad grid gap-1">
+            <h2 className="text-base">Available balance</h2>
+            <p className="num text-2xl font-semibold">{money(BALANCE)}</p>
+            {step > 0 && value > 0 && value <= BALANCE && <p className="num text-sm" style={{ color: 'var(--muted)' }}>{money(BALANCE - value)} after this send</p>}
+          </section>
+          <StaySafe />
+        </aside>
+      }
+    >
       {step < 3 && (
         <div className="mb-5 grid gap-2">
-          <div className="stepper" role="img" aria-label={`Step ${step + 1} of 3`}>{[0, 1, 2].map((i) => <span key={i} className={i <= step ? 'on' : ''} />)}</div>
+          <div className="stepper" data-note="steps" role="img" aria-label={`Step ${step + 1} of 3`}>{[0, 1, 2].map((i) => <span key={i} className={i <= step ? 'on' : ''} />)}</div>
           <p className="text-sm" style={{ color: 'var(--muted)' }}>Step {step + 1} of 3</p>
           <h2 className="text-xl">{titles[step]}</h2>
         </div>
@@ -288,7 +473,7 @@ export function Send() {
         <div className="grid gap-6">
           <section className="card card-pad grid gap-4">
             <Field label="Mobile number" error={errors.mobile} hint="Any format works: 0917 555 0142 or +63 917 555 0142">
-              {(p) => <input {...p} className="input num" inputMode="numeric" autoComplete="off" value={to.mobile} onChange={(e) => setTo({ name: '', mobile: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && checkRecipient()} />}
+              {(p) => <input {...p} className="input num" type="tel" inputMode="tel" autoComplete="off" enterKeyHint="next" value={to.mobile} onChange={(e) => setTo({ name: '', mobile: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && checkRecipient()} />}
             </Field>
             <Button block onClick={checkRecipient}>Continue</Button>
           </section>
@@ -307,7 +492,7 @@ export function Send() {
 
       {step === 1 && (
         <section className="card card-pad grid gap-4">
-          <p style={{ color: 'var(--muted)' }}>To {to.name || 'this number'} · <span className="num">{to.mobile}</span></p>
+          <p style={{ color: 'var(--muted)' }}>To {to.name || 'this number'}, <span className="num">{to.mobile}</span></p>
           <Field label="Amount in pesos" error={errors.amount} hint={`Available: ${money(BALANCE)}`}>
             {(p) => <input {...p} className="input num text-2xl font-semibold" inputMode="decimal" placeholder="0.00" autoFocus value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))} onKeyDown={(e) => e.key === 'Enter' && checkAmount()} />}
           </Field>
@@ -341,10 +526,17 @@ export function Send() {
       )}
 
       {step === 3 && (
-        <section className="card">
-          <Empty icon="CircleCheck" title="This is where the receipt would be" action={<Button onClick={() => navigate('/')}>Back to Home</Button>}>
+        <section className="card card-pad grid justify-items-center gap-4 text-center">
+          <div className="flex w-full items-center gap-2" style={{ maxWidth: 320 }} aria-hidden="true">
+            <span className="avatar">{USER.initials}</span>
+            <span style={{ flex: 1 }}><RouteLine stops={2} reached={1} tone="positive" /></span>
+            <span className="avatar" style={{ background: 'var(--pill-positive-bg)', color: 'var(--pill-positive-ink)' }}><DrawnCheck size={22} /></span>
+          </div>
+          <h2 className="text-lg">This is where the receipt would be</h2>
+          <p style={{ color: 'var(--muted)', maxWidth: '46ch' }}>
             In the real app, {money(value)} would now be on its way to {to.name || to.mobile}. This is a design demonstration, so no money was sent.
-          </Empty>
+          </p>
+          <Button onClick={() => navigate('/')}>Back to Home</Button>
         </section>
       )}
     </Page>
@@ -364,8 +556,28 @@ export function Activity() {
     }
     return [...byDay];
   }, [filter]);
+  const sum = totals(TRANSACTIONS);
   return (
-    <Page title="Activity" notes="activity" narrow>
+    <Page
+      title="Activity"
+      notes="activity"
+      narrow
+      rail={
+        <aside className="rail">
+          <section className="card card-pad grid gap-3" data-note="summary">
+            <h2 className="text-base">Across these {TRANSACTIONS.length} transactions</h2>
+            <div className="flow" role="img" aria-label="Money in compared with money out">
+              <span style={{ flexGrow: sum.in }} /><span style={{ flexGrow: -sum.out }} />
+            </div>
+            <dl className="kv">
+              <dt>Money in</dt><dd className="num" style={{ color: 'var(--positive)' }}>{signedMoney(sum.in)}</dd>
+              <dt>Money out</dt><dd className="num">{signedMoney(sum.out)}</dd>
+              <dt>Difference</dt><dd className="num">{signedMoney(sum.net)}</dd>
+            </dl>
+          </section>
+        </aside>
+      }
+    >
       <div className="mb-5">
         <Chips label="Filter transactions" value={filter} onChange={setFilter} options={[{ value: 'all', label: 'All' }, { value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }]} />
       </div>
@@ -389,7 +601,7 @@ export function Inbox() {
   const updated = (tickets.data || []).filter((t) => t.unread);
   const notices = NOTICES.filter((n) => n.tab === tab);
   return (
-    <Page title="Inbox" notes="inbox" narrow>
+    <Page title="Inbox" notes="inbox" narrow rail={<aside className="rail wide-only"><StaySafe /></aside>}>
       <div className="mb-5">
         <Segmented label="Inbox section" value={tab} onChange={setTab} options={[{ value: 'updates', label: 'Updates' }, { value: 'offers', label: 'Offers' }]} />
       </div>

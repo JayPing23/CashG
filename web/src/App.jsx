@@ -3,8 +3,9 @@ import { Link, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router-
 import { motion } from 'motion/react';
 import { api, useLoad } from './api.js';
 import { NOTES } from './demoData.js';
-import { Button, Empty, Icon, IconButton, Logo, Sheet, ToastProvider } from './ui.jsx';
-import { ALL_SERVICES, Activity, DemoSheet, Home, Inbox, Profile, Send, Services } from './pages/Wallet.jsx';
+import { Button, Empty, Icon, IconButton, Logo, Sheet, SlidingFill, ToastProvider } from './ui.jsx';
+import { Activity, Home, Inbox, Profile, Send, Services } from './pages/Wallet.jsx';
+import { ServicePage } from './pages/ServicePages.jsx';
 import { Help, NewTicket, TicketDetail, Tickets } from './pages/Tickets.jsx';
 import { SupportConsole, SupportTicket } from './pages/Support.jsx';
 
@@ -36,18 +37,21 @@ function useTheme() {
   const [theme, setThemeState] = useState(() => {
     try {
       const t = localStorage.getItem('cashg-theme');
-      return t === 'light' || t === 'dark' ? t : 'system';
+      return t === 'light' || t === 'system' ? t : 'dark'; // dark until a choice is saved
     } catch {
-      return 'system';
+      return 'dark';
     }
   });
   const setTheme = useCallback((next) => {
     setThemeState(next);
     if (next === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = next;
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+      meta.content = next === 'system' ? meta.dataset.default : next === 'dark' ? '#2f6fe4' : '#0866f2';
+    }
     try {
-      if (next === 'system') localStorage.removeItem('cashg-theme');
-      else localStorage.setItem('cashg-theme', next);
+      // 'system' is saved too, so following the device survives a reload instead of falling back to dark.
+      localStorage.setItem('cashg-theme', next);
     } catch {
       // The choice still applies for this visit.
     }
@@ -55,13 +59,13 @@ function useTheme() {
   return [theme, setTheme];
 }
 
-export function Page({ title, subtitle, back, notes, narrow, actions, hero, lifted, children }) {
-  const { setNotesKey, notesOn, setNotesOn } = useApp();
+export function Page({ title, subtitle, back, notes, narrow, actions, hero, lifted, rail, children }) {
+  const { setNotesKey, notesOn, setNotesOn, notesSeen, notesMin, setNotesMin } = useApp();
   const navigate = useNavigate();
   const heading = useRef(null);
   useEffect(() => {
     setNotesKey(notes);
-    document.title = `${title} · CashG`;
+    document.title = `${title} | CashG`;
     // Move focus to the new screen's title so keyboard and screen-reader users land in the right place.
     heading.current?.focus({ preventScroll: true });
     window.scrollTo(0, 0);
@@ -70,9 +74,10 @@ export function Page({ title, subtitle, back, notes, narrow, actions, hero, lift
   const notesButton = (
     <IconButton
       icon="Lightbulb"
-      label={notesOn ? 'Hide design notes' : 'Show design notes'}
+      label={notesOn && !notesMin ? 'Hide design notes' : 'Show design notes'}
       aria-pressed={notesOn}
-      onClick={() => setNotesOn(!notesOn)}
+      data-cue={notesSeen ? undefined : ''}
+      onClick={() => (notesOn && notesMin ? setNotesMin(false) : setNotesOn(!notesOn))}
     />
   );
   const headingProps = { ref: heading, tabIndex: -1, style: { outline: 'none' } };
@@ -89,10 +94,13 @@ export function Page({ title, subtitle, back, notes, narrow, actions, hero, lift
       {subtitle && <p className={`pagehead-sub${n}`}>{subtitle}</p>}
       <motion.div
         className={`canvas${n}${lifted ? ' lifted' : ''}`}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        // A full transform string runs on the compositor; the y shorthand runs on the main thread, which is busy during a page change.
+        initial={{ opacity: 0, transform: 'translateY(4px)' }}
+        animate={{ opacity: 1, transform: 'translateY(0px)' }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       >
+        {/* The rail comes first so it sits above the main column on narrow screens and floats beside it on wide ones. */}
+        {rail}
         {children}
       </motion.div>
     </>
@@ -100,21 +108,44 @@ export function Page({ title, subtitle, back, notes, narrow, actions, hero, lift
 }
 
 function NotesPanel() {
-  const { notesKey, setNotesOn } = useApp();
+  const { notesKey, setNotesOn, notesMin, setNotesMin } = useApp();
   const notes = NOTES[notesKey] || [];
+  const [open, setOpen] = useState(null);
+  useEffect(() => setOpen(null), [notesKey]);
+  // An open note lights up the part of the screen it explains, so "what is this?" lands on "oh, that".
+  useEffect(() => {
+    const spot = notes[open]?.spot;
+    if (!spot) return;
+    const parts = [...document.querySelectorAll(`[data-note="${spot}"]`)].filter((el) => el.getClientRects().length);
+    parts.forEach((el) => el.classList.add('note-spot'));
+    parts[0]?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    return () => parts.forEach((el) => el.classList.remove('note-spot'));
+  }, [open, notes]);
   return (
-    <aside className="notes" aria-label="Design notes">
+    <>
+    {/* Minimised, the panel only hides: the open question and its spotlight stay, so the screen can be read beside it. */}
+    <aside className="notes" aria-label="Design notes" hidden={notesMin}>
       <div className="flex items-center justify-between gap-3">
-        <h2>Design notes</h2>
+        <h2 className="flex-1">Behind this screen</h2>
+        <IconButton icon="Minimize2" label="Minimise design notes" onClick={() => setNotesMin(true)} />
         <IconButton icon="X" label="Hide design notes" onClick={() => setNotesOn(false)} />
       </div>
-      <p className="text-sm" style={{ color: 'var(--muted)' }}>What this screen does, and the principle behind it.</p>
+      <p className="text-sm" style={{ color: 'var(--muted)' }}>Tap a question to see the thinking behind it.</p>
       {notes.length ? (
         <ol>
-          {notes.map(([principle, text]) => (
-            <li key={principle}>
-              <strong>{principle}</strong>
-              <span>{text}</span>
+          {notes.map((n, i) => (
+            <li key={n.q} className={open === i ? 'open' : ''}>
+              <button type="button" className="note-q" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}>
+                <span>{n.q}</span>
+                {n.spot && <Icon name="Crosshair" size={14} style={{ color: 'var(--accent-text)', flex: 'none' }} />}
+                <Icon name="ChevronDown" size={18} />
+              </button>
+              {open === i && (
+                <div className="note-a">
+                  <p>{n.a}</p>
+                  <span className="note-law">{n.law}</span>
+                </div>
+              )}
             </li>
           ))}
         </ol>
@@ -122,21 +153,32 @@ function NotesPanel() {
         <p className="mt-3 text-sm" style={{ color: 'var(--muted)' }}>No notes for this screen.</p>
       )}
     </aside>
+    {notesMin && (
+      <button type="button" className="notes-fab" aria-label="Open design notes again" title="Design notes" onClick={() => setNotesMin(false)}>
+        <Icon name="CircleHelp" size={22} />
+      </button>
+    )}
+    </>
   );
 }
 
 function Shell({ brand, kind = '', nav, tabs = nav, centre, footer }) {
-  const { notesOn } = useApp();
+  const { notesOn, notesMin } = useApp();
   const links = (cls, items = nav) =>
     items.map((n) => (
       <NavLink key={n.to} to={n.to} end={n.end} className={cls}>
-        <Icon name={n.icon} size={cls === 'nav-item' ? 18 : 22} />
-        {n.label}
-        {n.badge > 0 && <span className="badge" aria-label={`${n.badge} with new updates`}>{n.badge}</span>}
+        {({ isActive }) => (
+          <>
+            {isActive && (cls === 'nav-item' ? <SlidingFill id="nav" className="nav-bg" radius={10} /> : <SlidingFill id="tab" className="tab-bg" />)}
+            <Icon name={n.icon} size={cls === 'nav-item' ? 18 : 22} />
+            {n.label}
+            {n.badge > 0 && <span className="badge" aria-label={`${n.badge} with new updates`}>{n.badge}</span>}
+          </>
+        )}
       </NavLink>
     ));
   return (
-    <div className={`app ${kind}${notesOn ? ' with-notes' : ''}`}>
+    <div className={`app ${kind}${notesOn && !notesMin ? ' with-notes' : ''}`}>
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 btn primary">Skip to content</a>
       <aside className="sidebar">
         <Link to={nav[0].to} className="brand" style={{ padding: '0 12px 20px' }}>
@@ -150,7 +192,7 @@ function Shell({ brand, kind = '', nav, tabs = nav, centre, footer }) {
         <Outlet />
       </main>
       {notesOn && <NotesPanel />}
-      <nav className="bottomnav" aria-label="Main">
+      <nav className="bottomnav" aria-label="Main" data-note="bar">
         {centre ? (
           <>
             {links('', tabs.slice(0, 2))}
@@ -182,18 +224,17 @@ function CustomerShell() {
     { to: '/inbox', label: 'Inbox', icon: 'Bell' },
     { to: '/profile', label: 'Profile', icon: 'User' },
   ];
-  const [qr, setQr] = useState(false);
+  const navigate = useNavigate();
   // On phones the bar mirrors GCash (two tabs, raised QR, two tabs); Inbox moves to the bell on Home.
   const tabs = nav.filter((n) => n.to !== '/inbox');
   return (
     <>
-    <DemoSheet service={qr ? ALL_SERVICES.find((s) => s.id === 'qr') : null} onClose={() => setQr(false)} />
     <Shell
       brand="CashG"
       kind="customer"
       nav={nav}
       tabs={tabs}
-      centre={{ label: 'QR', icon: 'QrCode', onClick: () => setQr(true) }}
+      centre={{ label: 'QR', icon: 'QrCode', onClick: () => navigate('/services/qr') }}
       footer={
         <>
           <Link to="/services" className="nav-item"><Icon name="LayoutGrid" size={18} />All services</Link>
@@ -255,7 +296,11 @@ function RecordingNotice({ projectId }) {
 
 export default function App() {
   const [theme, setTheme] = useTheme();
-  const [notesOn, setNotesOn] = usePref('cashg-notes', false);
+  const [notesOn, setNotesPref] = usePref('cashg-notes', false);
+  // The lightbulb carries a small dot until the notes have been opened once, then never again.
+  const [notesSeen, setNotesSeen] = usePref('cashg-notes-seen', false);
+  const [notesMin, setNotesMin] = useState(false);
+  const setNotesOn = useCallback((on) => { setNotesPref(on); setNotesMin(false); if (on) setNotesSeen(true); }, [setNotesPref, setNotesSeen]);
   const [hideBalance, setHideBalance] = usePref('cashg-hide-balance', false);
   const [notesKey, setNotesKey] = useState(null);
   const tickets = useLoad(api.tickets);
@@ -263,10 +308,10 @@ export default function App() {
 
   const value = useMemo(
     () => ({
-      theme, setTheme, notesOn, setNotesOn, hideBalance, setHideBalance, notesKey, setNotesKey, tickets,
+      theme, setTheme, notesOn, setNotesOn, notesSeen, notesMin, setNotesMin, hideBalance, setHideBalance, notesKey, setNotesKey, tickets,
       meta: meta.data || { categories: {}, transitions: {}, noteRequired: [] },
     }),
-    [theme, setTheme, notesOn, setNotesOn, hideBalance, setHideBalance, notesKey, tickets, meta.data]
+    [theme, setTheme, notesOn, setNotesOn, notesSeen, notesMin, hideBalance, setHideBalance, notesKey, tickets, meta.data]
   );
 
   return (
@@ -276,6 +321,7 @@ export default function App() {
           <Route element={<CustomerShell />}>
             <Route index element={<Home />} />
             <Route path="services" element={<Services />} />
+            <Route path="services/:id" element={<ServicePage />} />
             <Route path="send" element={<Send />} />
             <Route path="activity" element={<Activity />} />
             <Route path="inbox" element={<Inbox />} />

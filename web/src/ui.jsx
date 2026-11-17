@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import * as Icons from 'lucide-react';
 import { STATUS } from './lib.js';
 
@@ -81,11 +81,41 @@ export function Field({ label, optional, hint, error, count, children }) {
   );
 }
 
+// The selected fill of a chip, segment or nav item. Sharing a layoutId makes it slide to the next choice.
+// The radius is an inline style so motion can keep it round while the fill changes width.
+export const SlidingFill = ({ id, className, radius = 999 }) => (
+  <motion.span layoutId={id} className={className} style={{ borderRadius: radius }} transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }} />
+);
+
+// The CashG signature: one line with stops. `reached` is the index of the stop the journey is at now.
+export function RouteLine({ stops, reached, tone = 'accent', label }) {
+  const last = Math.max(stops - 1, 1);
+  return (
+    <span className={`route ${tone}`} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'}>
+      <motion.span className="route-fill" initial={{ scaleX: 0 }} animate={{ scaleX: reached / last }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} />
+      {Array.from({ length: stops }, (_, i) => (
+        <span key={i} className={`route-stop${i < reached ? ' done' : i === reached ? ' here' : ''}`} style={{ left: `${(i / last) * 100}%` }} />
+      ))}
+    </span>
+  );
+}
+
+// A tick that draws itself once: the closing moment of a finished task.
+export function DrawnCheck({ size = 30 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.2, ease: [0.16, 1, 0.3, 1] }} />
+    </svg>
+  );
+}
+
 export function Segmented({ label, value, onChange, options }) {
+  const id = useId();
   return (
     <div className="segmented" role="radiogroup" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)}>
+          {value === o.value && <SlidingFill id={id} className="seg-bg" />}
           {o.icon && <Icon name={o.icon} size={16} />}
           {o.label}
         </button>
@@ -99,10 +129,12 @@ export function Switch({ checked, onChange, label }) {
 }
 
 export function Chips({ label, value, onChange, options }) {
+  const id = useId();
   return (
     <div className="chips" role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} type="button" className="chip" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
+          {value === o.value && <SlidingFill id={id} className="chip-bg" />}
           {o.label}
           {o.count != null && <span className="num"> {o.count}</span>}
         </button>
@@ -114,6 +146,7 @@ export function Chips({ label, value, onChange, options }) {
 // A native <dialog>: the browser handles focus trapping, Escape and background inertness.
 export function Sheet({ open, onClose, title, children }) {
   const ref = useRef(null);
+  const drag = useDragControls();
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -121,15 +154,25 @@ export function Sheet({ open, onClose, title, children }) {
     if (!open && el.open) el.close();
   }, [open]);
   return (
-    <dialog
+    <motion.dialog
       ref={ref}
       className="sheet"
       aria-label={title}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
+      // On phones the sheet can be pulled down by its handle, like a native one. Only the handle starts
+      // the drag, so the sheet's own content still scrolls. The Close button and Escape always work.
+      drag="y"
+      dragListener={false}
+      dragControls={drag}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0.06, bottom: 0.8 }} // upward meets friction, not a wall
+      // A short flick is enough to dismiss; distance alone is not required.
+      onDragEnd={(_, info) => (info.offset.y > 90 || info.velocity.y > 350) && onClose()}
     >
       {open && (
         <>
+          <div className="sheet-grab" aria-hidden="true" onPointerDown={(e) => drag.start(e)} />
           <div className="sheet-head">
             <h2>{title}</h2>
             <IconButton icon="X" label="Close" onClick={onClose} />
@@ -137,7 +180,7 @@ export function Sheet({ open, onClose, title, children }) {
           <div className="sheet-body">{children}</div>
         </>
       )}
-    </dialog>
+    </motion.dialog>
   );
 }
 

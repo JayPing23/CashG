@@ -340,7 +340,25 @@ function createApp({ dbPath, publicDir, clarityProjectId = '' }) {
     throw new HttpError(404, 'Not found.');
   }
 
+  // Only this computer may talk to the app. Checking the Host and Origin headers stops a web page
+  // on another site from reaching it through the browser (DNS rebinding, cross-site requests).
+  const LOCAL = /^(localhost|127\.0\.0\.1)(:\d+)?$/;
+  const isLocal = (req) => {
+    if (!LOCAL.test(req.headers.host || '')) return false;
+    const origin = req.headers.origin;
+    if (!origin) return true;
+    try {
+      return LOCAL.test(new URL(origin).host);
+    } catch {
+      return false;
+    }
+  };
+
   const server = http.createServer((req, res) => {
+    if (!isLocal(req)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('CashG only accepts requests from this computer.');
+    }
     const url = new URL(req.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
