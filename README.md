@@ -78,9 +78,11 @@ The design decisions, and the research and usability principles behind them, are
 
 ## Run it
 
-Needs [Node.js](https://nodejs.org) 24 or newer (CashG uses Node's built-in SQLite).
+**Testers (Windows):** click **Code → Download ZIP** (or clone), extract it and double-click **`Start CashG.bat`**. Nothing to install: the first start downloads a private copy of Node.js into `app\runtime` (about 36 MB, checksum-verified), and later starts skip it. Then follow [How to test CashG](docs/How%20to%20test%20CashG.md).
 
-First time only:
+The built interface is committed in `app/public`, so after changing anything in `web/`, run `npm run build` and commit `app/public` too.
+
+Other systems need [Node.js](https://nodejs.org) 24 or newer (CashG uses Node's built-in SQLite). First time only:
 
 ```bash
 cd web
@@ -88,7 +90,7 @@ npm install
 npm run build
 ```
 
-Then double-click **`Start CashG.bat`** (Windows), or from the project folder run:
+Then from the project folder run:
 
 ```bash
 node app/server.js --open

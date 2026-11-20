@@ -6,15 +6,19 @@ It takes about 10 minutes.
 
 ## Start it
 
-1. Download `CashG.zip`.
+1. On the [CashG GitHub page](https://github.com/JayPing23/CashG), click **Code → Download ZIP** (or `git clone` it).
 2. **Right-click the zip → Properties → tick "Unblock" → OK.** (This stops Windows from warning about a downloaded file.)
 3. Right-click the zip → **Extract All**.
-4. Open the extracted `CashG` folder and double-click **Start CashG**.
+4. Open the extracted `CashG-main` folder and double-click **Start CashG**.
 5. A black window opens and your browser shows CashG. Keep the black window open while you test. Close it when you are done.
+
+The first start downloads a private copy of Node.js (about 36 MB, one time only), so it takes a minute. Later starts are instant.
 
 If Windows still shows "Windows protected your PC", click **More info → Run anyway**.
 
-Works on Windows 10 and 11. No installation and no internet needed.
+Works on Windows 10 and 11. Nothing is installed on your computer.
+
+**Stay connected to the internet and use Chrome or Edge.** With your OK (the app asks first), your clicks are recorded with Microsoft Clarity so our group can see where the design works. Brave and ad blockers stop the recording, so turn off Brave Shields or your ad blocker for `localhost` while testing.
 
 ## Please do not type real details
 

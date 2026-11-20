@@ -94,7 +94,7 @@ The standard ten statements. Each is rated from 1 (strongly disagree) to 5 (stro
 4. Testers need internet for recordings to reach your dashboard.
 5. Record what you observed: dead clicks, rage clicks, where people scrolled back, where they left.
 
-Not yet verified by us: whether Clarity records a copy running on `localhost`. Check your dashboard after your own first test run before sending the zip to classmates.
+Verified on 2026-11-20: Clarity records a copy running on `localhost` in Chrome. Sessions appear under Recordings 30 minutes to 2 hours after they end. Brave Shields and ad blockers block `clarity.ms`, and automated browsers are excluded as bot traffic.
 
 **Accessibility Insights for Web** (free Microsoft browser extension)
 
